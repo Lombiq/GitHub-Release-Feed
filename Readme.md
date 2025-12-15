@@ -1,14 +1,13 @@
-# Lombiq <add project name here>
+# Lombiq GitHub Release Feed
 
 ## About
 
-Add a general overview of the project here. Keep or remove the OSOCE note below as necessary.
-
-Do you want to quickly try out this project and see it in action? Check it out in our [Open-Source Orchard Core Extensions](https://github.com/Lombiq/Open-Source-Orchard-Core-Extensions) full Orchard Core solution and also see our other useful Orchard Core-related open-source projects!
+Single-page release feed that fetches the latest releases across all repositories of a GitHub organization via the GitHub GraphQL API. Enter an org login and a PAT, apply filters (include drafts/prereleases, max items, search, since, sort), and open releases with one click. The UI is a single `index.html` using Tailwind (Play CDN), with no persistence (token kept in memory only). Most of the code was generated with AI assistance; see `AGENTS.md` for notes agents use to keep context across sessions.
 
 ## Documentation
 
-Add detailed documentation here. If it's a lot of content then create documentation pages under the *Docs* folder and link pages here.
+- Run locally: open `index.html` in a browser, enter the organization name and a PAT with access to the org’s public and private repos.
+- The app is deployed to a DotNest site at https://githubconsumer.dotnest.net/ so you can see it live. DotNest is a managed Orchard Core CMS-as-a-Service, maintained by [Lombiq](https://lombiq.com), that lets you run production-ready [Orchard Core](https://orhardproject.net) sites without having to handle hosting, upgrades, or infrastructure. This project is deployed on [DotNest](https://dotnest.com), so you can see it running live in a real Orchard environment.
 
 ## Contributing and support
 
