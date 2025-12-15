@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Lombiq GitHub Releases</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <style type="text/tailwindcss">
+    @theme {
+      --color-brand: #2563eb;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900">
+  <header class="sticky top-0 z-10 border-b border-slate-200 bg-white/90 backdrop-blur">
+    <div class="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-5">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 class="text-lg font-semibold leading-tight">GitHub Releases Feed</h1>
+          <p class="text-sm text-slate-600">Org: <span id="orgLabel" class="font-medium text-slate-900">Lombiq</span></p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button id="loadBtn" class="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand/90 focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2">Load releases</button>
+          <button id="clearBtn" class="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-300 focus:ring-offset-2" title="Clears token and results">Clear</button>
+        </div>
+      </div>
+
+      <div class="grid gap-3 lg:grid-cols-6">
+        <label class="lg:col-span-2 space-y-1">
+          <span class="text-xs font-semibold uppercase tracking-wide text-slate-600">Org</span>
+          <input id="org" type="text" value="Lombiq" class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30" />
+        </label>
+        <label class="lg:col-span-3 space-y-1">
+          <span class="text-xs font-semibold uppercase tracking-wide text-slate-600">PAT</span>
+          <input id="token" type="password" placeholder="github_pat_..." class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30" />
+        </label>
+        <div class="lg:col-span-1 flex flex-col justify-end">
+          <div id="status" class="text-sm text-slate-600"></div>
+        </div>
+      </div>
+
+      <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
+        <label class="space-y-1">
+          <span class="text-xs font-semibold uppercase tracking-wide text-slate-600">Max items</span>
+          <select id="limit" class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30">
+            <option>25</option>
+            <option selected>50</option>
+            <option>100</option>
+            <option>200</option>
+          </select>
+        </label>
+        <label class="space-y-1">
+          <span class="text-xs font-semibold uppercase tracking-wide text-slate-600">Include</span>
+          <select id="includeMode" class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30">
+            <option value="published" selected>Published only</option>
+            <option value="published+prerelease">Published + prerelease</option>
+            <option value="all">All (incl. drafts)</option>
+          </select>
+        </label>
+        <label class="space-y-1">
+          <span class="text-xs font-semibold uppercase tracking-wide text-slate-600">Search</span>
+          <input id="search" type="text" placeholder="repo, tag, release name..." class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30" />
+        </label>
+        <label class="space-y-1">
+          <span class="text-xs font-semibold uppercase tracking-wide text-slate-600">Since</span>
+          <input id="since" type="date" class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30" />
+        </label>
+        <label class="space-y-1">
+          <span class="text-xs font-semibold uppercase tracking-wide text-slate-600">Sort</span>
+          <select id="sort" class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30">
+            <option value="publishedAt-desc" selected>Published date (newest first)</option>
+            <option value="publishedAt-asc">Published date (oldest first)</option>
+            <option value="repo-asc">Repo A-Z</option>
+            <option value="repo-desc">Repo Z-A</option>
+          </select>
+        </label>
+      </div>
+    </div>
+  </header>
+
+  <main class="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-6">
+    <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <h2 class="text-sm font-semibold text-slate-800">Notes</h2>
+      <ul class="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-600">
+        <li>Token is used only in memory; nothing is stored.</li>
+        <li>Pulls repos and releases, then flattens into one feed sorted newest first by default.</li>
+      </ul>
+    </div>
+
+    <div id="results" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"></div>
+  </main>
+
+  <script>
+    const REPO_PAGE_SIZE = 100;
+    const RELEASE_PAGE_SIZE = 50;
+
+    const REPO_QUERY = `
+      query($org: String!, $repoPageSize: Int!, $repoCursor: String) {
+        organization(login: $org) {
+          repositories(
+            first: $repoPageSize,
+            after: $repoCursor,
+            orderBy: { field: PUSHED_AT, direction: DESC }
+          ) {
+            totalCount
+            pageInfo {
+              hasNextPage
+              endCursor
+            }
+            nodes {
+              name
+              url
+            }
+          }
+        }
+      }
+    `;
+
+    const RELEASE_QUERY = `
+      query($org: String!, $repo: String!, $releasePageSize: Int!, $releaseCursor: String) {
+        repository(owner: $org, name: $repo) {
+          releases(
+            first: $releasePageSize,
+            after: $releaseCursor,
+            orderBy: { field: CREATED_AT, direction: DESC }
+          ) {
+            pageInfo {
+              hasNextPage
+              endCursor
+            }
+            nodes {
+              name
+              tagName
+              url
+              publishedAt
+              isPrerelease
+              isDraft
+            }
+          }
+        }
+      }
+    `;
+
+    const els = {
+      org: document.getElementById("org"),
+      orgLabel: document.getElementById("orgLabel"),
+      token: document.getElementById("token"),
+      loadBtn: document.getElementById("loadBtn"),
+      clearBtn: document.getElementById("clearBtn"),
+      status: document.getElementById("status"),
+      results: document.getElementById("results"),
+      limit: document.getElementById("limit"),
+      includeMode: document.getElementById("includeMode"),
+      search: document.getElementById("search"),
+      since: document.getElementById("since"),
+      sort: document.getElementById("sort"),
+    };
+
+    let allItems = [];
+
+    function setStatus(msg, variant = "muted") {
+      const palette = {
+        muted: "text-sm text-slate-600",
+        ok: "text-sm text-emerald-600",
+        error: "text-sm text-red-600",
+      };
+      els.status.className = palette[variant] || palette.muted;
+      els.status.textContent = msg;
+    }
+
+    function fmtDate(iso) {
+      if (!iso) return "-";
+      const d = new Date(iso);
+      return d.toISOString().slice(0, 10) + " " + d.toISOString().slice(11, 16) + "Z";
+    }
+
+    function normalize(str) {
+      return (str || "").toLowerCase().trim();
+    }
+
+    function applyFilters(items) {
+      const mode = els.includeMode.value;
+      const q = normalize(els.search.value);
+      const since = els.since.value ? new Date(els.since.value + "T00:00:00Z").getTime() : null;
+
+      const filtered = items.filter(x => {
+        if (mode === "published") {
+          if (x.isDraft) return false;
+          if (x.isPrerelease) return false;
+          if (!x.publishedAt) return false;
+        } else if (mode === "published+prerelease") {
+          if (x.isDraft) return false;
+          if (!x.publishedAt) return false;
+        }
+
+        if (since && x.publishedAt) {
+          if (new Date(x.publishedAt).getTime() < since) return false;
+        } else if (since && !x.publishedAt) {
+          return false;
+        }
+
+        if (q) {
+          const hay = normalize([x.repo, x.tagName, x.releaseName, x.url].join(" "));
+          if (!hay.includes(q)) return false;
+        }
+        return true;
+      });
+
+      const sort = els.sort.value;
+      filtered.sort((a, b) => {
+        if (sort.startsWith("publishedAt")) {
+          const ad = a.publishedAt ? new Date(a.publishedAt).getTime() : 0;
+          const bd = b.publishedAt ? new Date(b.publishedAt).getTime() : 0;
+          return sort.endsWith("desc") ? (bd - ad) : (ad - bd);
+        }
+        if (sort === "repo-asc") return a.repo.localeCompare(b.repo);
+        if (sort === "repo-desc") return b.repo.localeCompare(a.repo);
+        return 0;
+      });
+
+      const lim = parseInt(els.limit.value, 10);
+      return filtered.slice(0, lim);
+    }
+
+    function render() {
+      const items = applyFilters(allItems);
+      els.results.innerHTML = "";
+
+      if (!items.length) {
+        els.results.innerHTML = `<div class="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm">No results. Check filters, org name, or token permissions.</div>`;
+        return;
+      }
+
+      for (const item of items) {
+        const badges = [];
+        badges.push(`<span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-700">Repo: ${escapeHtml(item.repo)}</span>`);
+        if (item.isPrerelease) badges.push(`<span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800">Prerelease</span>`);
+        if (item.isDraft) badges.push(`<span class="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-medium text-red-800">Draft</span>`);
+
+        const published = item.publishedAt ? fmtDate(item.publishedAt) : "-";
+        const title = item.releaseName ? item.releaseName : item.tagName;
+
+        const card = document.createElement("div");
+        card.className = "flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm";
+        card.innerHTML = `
+          <div class="space-y-1">
+            <div class="text-base font-semibold text-slate-900">${escapeHtml(title)}</div>
+            <div class="text-sm text-slate-600">
+              <span class="font-medium text-slate-700">Tag:</span> ${escapeHtml(item.tagName || "-")}
+              <span class="mx-2 text-slate-400">|</span>
+              <span class="font-medium text-slate-700">Published:</span> ${escapeHtml(published)}
+            </div>
+          </div>
+          <div class="flex flex-wrap gap-2">${badges.join("")}</div>
+          <div class="flex justify-end">
+            <a href="${item.url}" target="_blank" rel="noreferrer" class="inline-flex items-center rounded-lg bg-brand px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand/90 focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2">Open release</a>
+          </div>
+        `;
+
+        els.results.appendChild(card);
+      }
+    }
+
+    function escapeHtml(s) {
+      return String(s ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    async function fetchGraphQL({ token, query, variables }) {
+      const res = await fetch("https://api.github.com/graphql", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          query,
+          variables,
+        }),
+      });
+
+      const json = await res.json();
+      if (!res.ok || json.errors) {
+        const msg = json.errors?.map(e => e.message).join(" | ") || `${res.status} ${res.statusText}`;
+        throw new Error(msg);
+      }
+      return json.data;
+    }
+
+    async function fetchAllRepos({ token, orgLogin }) {
+      let repoCursor = null;
+      const repos = [];
+      let totalCount = null;
+
+      while (true) {
+        const data = await fetchGraphQL({
+          token,
+          query: REPO_QUERY,
+          variables: {
+            org: orgLogin,
+            repoPageSize: REPO_PAGE_SIZE,
+            repoCursor,
+          },
+        });
+
+        const page = data?.organization?.repositories;
+        if (!page) throw new Error("Organization or repositories not found.");
+
+        repos.push(...(page.nodes || []));
+        if (totalCount === null) totalCount = page.totalCount ?? repos.length;
+
+        if (!page.pageInfo?.hasNextPage) break;
+        repoCursor = page.pageInfo.endCursor;
+        if (!repoCursor) break;
+      }
+
+      return { repos, totalCount };
+    }
+
+    async function fetchAllReleasesForRepo({ token, orgLogin, repo }) {
+      let releaseCursor = null;
+      const releases = [];
+
+      while (true) {
+        const data = await fetchGraphQL({
+          token,
+          query: RELEASE_QUERY,
+          variables: {
+            org: orgLogin,
+            repo,
+            releasePageSize: RELEASE_PAGE_SIZE,
+            releaseCursor,
+          },
+        });
+
+        const relConn = data?.repository?.releases;
+        if (!relConn) break;
+
+        releases.push(...(relConn.nodes || []));
+
+        if (!relConn.pageInfo?.hasNextPage) break;
+        releaseCursor = relConn.pageInfo.endCursor;
+        if (!releaseCursor) break;
+      }
+
+      return releases.map(rel => ({
+        repo,
+        repoUrl: null,
+        releaseName: rel?.name,
+        tagName: rel?.tagName,
+        url: rel?.url,
+        publishedAt: rel?.publishedAt,
+        isPrerelease: !!rel?.isPrerelease,
+        isDraft: !!rel?.isDraft,
+      }));
+    }
+
+    async function fetchAllReleasesForRepos({ token, orgLogin, repos, onProgress }) {
+      const items = [];
+      let index = 0;
+      const maxConcurrency = Math.min(8, repos.length);
+
+      async function worker() {
+        while (true) {
+          const currentIndex = index++;
+          if (currentIndex >= repos.length) break;
+          const repo = repos[currentIndex];
+          onProgress?.(currentIndex + 1, repos.length, repo.name);
+          const rels = await fetchAllReleasesForRepo({ token, orgLogin, repo: repo.name });
+          items.push(...rels.map(r => ({ ...r, repoUrl: repo.url })));
+        }
+      }
+
+      const workers = Array.from({ length: maxConcurrency }, () => worker());
+      await Promise.all(workers);
+      return items;
+    }
+
+    async function load() {
+      const orgLogin = els.org.value.trim();
+      const token = els.token.value.trim();
+
+      els.orgLabel.textContent = orgLogin || "-";
+
+      if (!orgLogin) {
+        setStatus("Please enter an organization login.", "error");
+        return;
+      }
+      if (!token) {
+        setStatus("Please enter a GitHub PAT (fine-grained or classic).", "error");
+        return;
+      }
+
+      try {
+        setStatus("Loading...");
+        els.loadBtn.disabled = true;
+
+        const { repos, totalCount } = await fetchAllRepos({ token, orgLogin });
+        setStatus(`Loading releases for ${repos.length} repos...`);
+
+        const items = await fetchAllReleasesForRepos({
+          token,
+          orgLogin,
+          repos,
+          onProgress: (done, total, name) => setStatus(`Loading releases (${done}/${total}): ${name}`),
+        });
+
+        items.sort((a, b) => {
+          const ad = a.publishedAt ? new Date(a.publishedAt).getTime() : 0;
+          const bd = b.publishedAt ? new Date(b.publishedAt).getTime() : 0;
+          return bd - ad;
+        });
+
+        allItems = items;
+
+        const repoCountLabel = totalCount ?? repos.length;
+        setStatus(`Loaded ${allItems.length} releases across ${repoCountLabel} repositories in ${orgLogin}.`, "ok");
+        render();
+      } catch (e) {
+        console.error(e);
+        setStatus(`Error: ${e.message}`, "error");
+        els.results.innerHTML = `<div class="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800 shadow-sm">Failed to load. Check token permissions and org name.</div>`;
+      } finally {
+        els.loadBtn.disabled = false;
+      }
+    }
+
+    function clearAll() {
+      els.token.value = "";
+      allItems = [];
+      els.results.innerHTML = "";
+      setStatus("Cleared.");
+    }
+
+    ["limit", "includeMode", "search", "since", "sort"].forEach(id => {
+      const el = document.getElementById(id);
+      el.addEventListener("input", render);
+      el.addEventListener("change", render);
+    });
+
+    els.loadBtn.addEventListener("click", load);
+    els.clearBtn.addEventListener("click", clearAll);
+
+    (function initSince() {
+      const d = new Date();
+      d.setUTCDate(d.getUTCDate() - 30);
+      els.since.value = d.toISOString().slice(0, 10);
+    })();
+  </script>
+</body>
+</html>
