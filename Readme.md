@@ -7,7 +7,7 @@ Single-page release feed that fetches the latest releases across all repositorie
 ## Documentation
 
 - Run locally: open `index.html` in a browser, enter the organization name and a PAT with access to the org’s public and private repos.
-- The app is deployed to a DotNest site at https://githubconsumer.dotnest.net/ so you can see it live. DotNest is a managed Orchard Core CMS-as-a-Service, maintained by [Lombiq](https://lombiq.com), that lets you run production-ready [Orchard Core](https://orhardproject.net) sites without having to handle hosting, upgrades, or infrastructure. This project is deployed on [DotNest](https://dotnest.com), so you can see it running live in a real Orchard environment.
+- The app is deployed to a DotNest site at https://githubreleasefeed.dotnest.net/ so you can see it live. DotNest is a managed Orchard Core CMS-as-a-Service, maintained by [Lombiq](https://lombiq.com), that lets you run production-ready [Orchard Core](https://orhardproject.net) sites without having to handle hosting, upgrades, or infrastructure. This project is deployed on [DotNest](https://dotnest.com), so you can see it running live in a real Orchard environment.
 
 ## Contributing and support
 
