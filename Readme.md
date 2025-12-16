@@ -4,7 +4,7 @@
 
 Single-page release feed that fetches the latest releases across all repositories of a GitHub organization via the GitHub GraphQL API. Enter an org login and a PAT, apply filters (include drafts/prereleases, max items, search, since, sort), and open releases with one click. The UI is a single `index.html` using Tailwind (Play CDN), with no persistence (token kept in memory only). Most of the code was generated with AI assistance; see `AGENTS.md` for notes agents use to keep context across sessions.
 
-[![GitHub Release Feed Screenshot](Screenshot.png)](creenshot.png)
+[![GitHub Release Feed Screenshot](Screenshot.png)](screenshot.png)
 
 ## Documentation
 
